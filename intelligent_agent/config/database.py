@@ -12,6 +12,9 @@ load_dotenv()
 # Database URL from environment (.env file)
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Global variable to keep context manager alive
+_checkpointer_context = None
+
 
 def create_checkpointer() -> Union[PostgresSaver, MemorySaver]:
     """
@@ -20,6 +23,8 @@ def create_checkpointer() -> Union[PostgresSaver, MemorySaver]:
     Returns:
         PostgresSaver if DATABASE_URL is configured, otherwise MemorySaver
     """
+    global _checkpointer_context
+    
     # Check if DATABASE_URL is set and not empty
     db_url = os.getenv("DATABASE_URL", "").strip()
     
@@ -29,9 +34,9 @@ def create_checkpointer() -> Union[PostgresSaver, MemorySaver]:
     
     try:
         # Create PostgreSQL checkpointer (from_conn_string returns a context manager)
-        # We need to enter the context manager to get the actual PostgresSaver instance
-        ctx_manager = PostgresSaver.from_conn_string(db_url)
-        checkpointer = ctx_manager.__enter__()
+        # Store the context manager globally to keep it alive
+        _checkpointer_context = PostgresSaver.from_conn_string(db_url)
+        checkpointer = _checkpointer_context.__enter__()
         
         # Initialize tables if they don't exist
         checkpointer.setup()
@@ -42,6 +47,8 @@ def create_checkpointer() -> Union[PostgresSaver, MemorySaver]:
     except Exception as e:
         print(f"⚠️  Failed to initialize database checkpointer: {e}")
         print("⚠️  Falling back to in-memory checkpointer.")
+        import traceback
+        traceback.print_exc()
         return MemorySaver()
 
 

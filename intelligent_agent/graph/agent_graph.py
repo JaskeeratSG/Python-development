@@ -126,32 +126,25 @@ class AgentGraph:
         if config is None:
             config = {"configurable": {"thread_id": thread_id or "default"}}
         
-        # Try to get existing state from checkpointer for conversation continuity
+        # Create initial state with the new query
+        initial_state = create_initial_state(query)
+        initial_state["messages"] = [HumanMessage(content=query)]
+        
+        # Load previous conversation messages from checkpointer for this thread_id
+        # This preserves conversation history across queries with the same thread_id
         try:
-            existing_state = self.graph.get_state(config)
-            if existing_state and existing_state.values:
-                # Continue conversation - use existing state and add new query
-                current_state = existing_state.values
-                # Update query
-                current_state["query"] = query
-                # Add new user message to existing conversation
-                current_state["messages"].append(HumanMessage(content=query))
-                # Clear previous response/error/context for new query (but keep messages)
-                current_state["response"] = None
-                current_state["error"] = None
-                current_state["context"] = ""  # Clear context for new query
-                current_state["results"] = []  # Clear previous results
-                current_state["data_freshness"] = {}  # Clear freshness info
-                # Use existing state as base
-                initial_state = current_state
-            else:
-                # New conversation - create fresh state
-                initial_state = create_initial_state(query)
-                initial_state["messages"].append(HumanMessage(content=query))
+            existing_checkpoint = self.graph.get_state(config)
+            if existing_checkpoint and existing_checkpoint.values:
+                # Get previous messages from the saved checkpoint
+                previous_messages = existing_checkpoint.values.get("messages", [])
+                if previous_messages:
+                    # Prepend previous conversation history to maintain context
+                    # The new query is already added above
+                    initial_state["messages"] = previous_messages + [HumanMessage(content=query)]
         except Exception:
-            # If get_state fails, start fresh
-            initial_state = create_initial_state(query)
-            initial_state["messages"].append(HumanMessage(content=query))
+            # If checkpoint doesn't exist or loading fails, start fresh
+            # This is normal for new conversations
+            pass
         
         # Run the graph with config for state persistence
         final_state = self.graph.invoke(initial_state, config=config)
