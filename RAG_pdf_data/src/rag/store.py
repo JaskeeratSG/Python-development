@@ -95,37 +95,6 @@ def get_chunk_count(doc_id: str) -> int | None:
         return None
 
 
-def get_chunk_previews(doc_id: str, limit: int = 20, max_chars: int = 400) -> List[dict]:
-    """
-    Return a list of chunk previews (for inspection). Each item: {"index": i, "preview": "..."}.
-
-    Args:
-        doc_id: Document ID.
-        limit: Max number of chunks to return.
-        max_chars: Max characters per chunk preview (truncated with "...").
-    """
-    client = _get_client()
-    name = _collection_name(doc_id)
-    try:
-        coll = client.get_collection(name=name)
-        n = coll.count()
-        if n == 0:
-            return []
-        result = coll.get(include=["documents"], limit=min(limit, n))
-        print(result)
-        docs = result.get("documents") or []
-        ids = result.get("ids") or []
-        out = []
-        for i, (idx, text) in enumerate(zip(ids, docs)):
-            if not text:
-                continue
-            preview = text[:max_chars] + ("..." if len(text) > max_chars else "")
-            out.append({"index": i, "chunk_id": idx, "preview": preview, "length": len(text)})
-        return out
-    except Exception:
-        return []
-
-
 def delete_document_chunks(doc_id: str) -> None:
     """Remove all stored chunks for a document."""
     client = _get_client()

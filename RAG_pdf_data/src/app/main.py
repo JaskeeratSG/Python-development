@@ -233,24 +233,6 @@ async def get_chunk_info(doc_id: str):
     }
 
 
-@app.get("/api/documents/{doc_id}/chunks/preview")
-async def get_chunk_preview(doc_id: str, limit: int = 20, max_chars: int = 400):
-    """Return chunk previews so you can see the actual text that was chunked (for debugging)."""
-    d = _get_doc(doc_id)
-    if not d:
-        raise HTTPException(status_code=404, detail="Document not found.")
-    try:
-        from rag.store import get_chunk_previews
-        previews = get_chunk_previews(doc_id, limit=limit, max_chars=max_chars)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-    return {
-        "doc_id": doc_id,
-        "chunks": previews,
-        "count": len(previews),
-    }
-
-
 @app.post("/api/documents/{doc_id}/ask", response_model=AskResponse)
 async def ask(doc_id: str, body: AskRequest):
     """Ask a question about a document. For CVs, use max_words to limit answer length."""
