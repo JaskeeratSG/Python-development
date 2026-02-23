@@ -31,33 +31,28 @@ class CoordinatorAgent(BaseAgent):
         Returns:
             Updated state with routing decision
         """
-        query = state["query"].lower()
-        
-        # Add system message for routing
+        # Add system message for routing - let LLM make intelligent decisions
         routing_prompt = SystemMessage(content="""
         You are a coordinator that routes queries to specialized agents.
-        Analyze the query and determine which agent should handle it:
+        Analyze the query and conversation history to determine which agent should handle it.
         
+        Routing options:
         - "planner_agent": For trip planning, flight booking, hotel booking, travel planning, event planning, scheduling
         - "search_agent": For queries needing current web information, news, latest data, recent events, or real-time information (but NOT flight/travel booking)
-        - "end": For simple conversational queries (greetings, casual chat, general questions that don't need web search)
+        - "end": For conversational queries, follow-up questions, or when the user explicitly doesn't want external search
         
-        Examples:
-        - "Book a trip to Bangkok" → "planner_agent" (trip planning)
-        - "Flight prices from Delhi to Mumbai" → "planner_agent" (flight booking)
-        - "Hey how are you" → "end" (conversational)
-        - "Who won IPL in 2025?" → "search_agent" (needs current information)
-        - "What's the weather today?" → "search_agent" (needs current data)
-        - "Plan a trip" → "planner_agent" (trip planning)
+        Important: 
+        - Pay attention to user instructions like "don't search" or "no external search"
+        - Follow-up questions referencing previous conversation should use "end" to access conversation history
+        - Use conversation context to understand what the user is asking about
         
         Respond with ONLY the agent name ("planner_agent", "search_agent", or "end"), nothing else.
         """)
         
         # Build message history for context
-        # Include previous conversation messages for context
         messages = [routing_prompt]
         
-        # Add conversation history (last 5 messages for context)
+        # Add conversation history for context
         conversation_messages = state.get("messages", [])
         if len(conversation_messages) > 1:
             # Include recent conversation history (excluding the current query which is last)
@@ -68,13 +63,11 @@ class CoordinatorAgent(BaseAgent):
         user_message = HumanMessage(content=f"Route this query: {state['query']}")
         messages.append(user_message)
         
-        # Get routing decision from LLM with conversation context
+        # Get routing decision from LLM - trust its judgment
         response = self.llm.invoke(messages)
         
-        # Extract agent name from response
+        # Extract and normalize agent name from response
         next_agent = response.content.strip().lower()
-        
-        # Normalize the response
         if "planner_agent" in next_agent:
             next_agent = "planner_agent"
         elif "search_agent" in next_agent:

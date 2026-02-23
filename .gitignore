@@ -1,6 +1,16 @@
-
 # Environment variables
 .env
 *.env
 .env.local
 .env.*.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# RAG PDF data - generated and cache (do not push)
+RAG_pdf_data/chroma_db/
+RAG_pdf_data/uploads/
+RAG_pdf_data/data/
+RAG_pdf_data/.cache/

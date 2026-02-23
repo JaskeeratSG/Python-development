@@ -1,0 +1,10 @@
+.env
+uploads/
+chroma_db/
+data/
+.cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
