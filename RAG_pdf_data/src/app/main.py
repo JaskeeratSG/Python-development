@@ -86,6 +86,8 @@ async def root():
             "documents": "GET /api/documents",
             "summary": "GET /api/documents/{doc_id}/summary",
             "ask": "POST /api/documents/{doc_id}/ask",
+            "chroma": "GET /api/chroma",
+            "chunks": "GET /api/documents/{doc_id}/chunks",
         },
     }
 
@@ -210,14 +212,42 @@ async def get_summary(doc_id: str):
     return {"doc_id": doc_id, "summary": d.get("summary"), "is_cv": d["is_cv"]}
 
 
+@app.get("/api/chroma")
+async def list_chroma_collections(preview: int | None = None):
+    """
+    List all Chroma DB collections (one per document) with chunk counts.
+    Use ?preview=N to include the first N chunk texts per collection.
+    """
+    try:
+        from rag.store import (
+            CHROMA_PERSIST_DIR,
+            get_chunk_previews,
+            list_chroma_collections as store_list,
+        )
+        collections = store_list()
+        out = {
+            "chroma_path": str(CHROMA_PERSIST_DIR),
+            "collections": collections,
+        }
+        if preview is not None and preview > 0:
+            for c in out["collections"]:
+                c["preview_chunks"] = get_chunk_previews(c["doc_id"], limit=min(preview, 20))
+        return out
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chroma error: {e}") from e
+
+
 @app.get("/api/documents/{doc_id}/chunks")
-async def get_chunk_info(doc_id: str):
-    """Check if document was chunked and stored in the vector store (for debugging)."""
+async def get_chunk_info(doc_id: str, preview: int | None = None):
+    """
+    Chunk info for a document (count, has_chunks).
+    Use ?preview=N to return the first N chunk ids and texts.
+    """
     d = _get_doc(doc_id)
     if not d:
         raise HTTPException(status_code=404, detail="Document not found.")
     try:
-        from rag.store import get_chunk_count
+        from rag.store import get_chunk_count, get_chunk_previews
         count = get_chunk_count(doc_id)
     except Exception as e:
         return {
@@ -226,11 +256,17 @@ async def get_chunk_info(doc_id: str):
             "has_chunks": False,
             "error": str(e),
         }
-    return {
+    payload = {
         "doc_id": doc_id,
         "chunk_count": count if count is not None else 0,
         "has_chunks": (count or 0) > 0,
     }
+    if preview is not None and preview > 0:
+        try:
+            payload["chunks"] = get_chunk_previews(doc_id, limit=min(preview, 50))
+        except Exception as e:
+            payload["chunks_error"] = str(e)
+    return payload
 
 
 @app.post("/api/documents/{doc_id}/ask", response_model=AskResponse)

@@ -5,8 +5,9 @@ from typing import List
 
 from app.config import CHROMA_DIR
 
-# Persist Chroma under project
+# Expose for API
 CHROMA_PERSIST_DIR = Path(CHROMA_DIR)
+
 CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
 
 _client = None
@@ -103,3 +104,41 @@ def delete_document_chunks(doc_id: str) -> None:
         client.delete_collection(name)
     except Exception:
         pass
+
+
+def list_chroma_collections() -> list[dict]:
+    """
+    List all Chroma collections with doc_id and chunk count.
+    Returns list of {"name", "doc_id", "chunk_count"}.
+    """
+    client = _get_client()
+    collections = client.list_collections()
+    out = []
+    for coll in collections:
+        meta = coll.metadata or {}
+        doc_id = meta.get("doc_id", "?")
+        try:
+            count = coll.count()
+        except Exception:
+            count = 0
+        out.append({"name": coll.name, "doc_id": doc_id, "chunk_count": count})
+    return out
+
+
+def get_chunk_previews(doc_id: str, limit: int = 5) -> list[dict]:
+    """
+    Get first `limit` chunk ids and texts for a document.
+    Returns list of {"id", "text"} (empty if no collection).
+    """
+    client = _get_client()
+    name = _collection_name(doc_id)
+    try:
+        coll = client.get_collection(name=name)
+    except Exception:
+        return []
+    if coll.count() == 0:
+        return []
+    data = coll.get(limit=limit, include=["documents"])
+    ids = data.get("ids") or []
+    docs = (data.get("documents") or [[]])[0] if data.get("documents") else []
+    return [{"id": i, "text": t or ""} for i, t in zip(ids, docs)]
